@@ -1,7 +1,8 @@
 extern crate serde_json;
 
-use std::io::{self, Read};
+use atty::Stream;
 use failure::Error;
+use std::io::{self, Read};
 use structopt::StructOpt;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -21,11 +22,29 @@ fn read_from_stdin() -> Result<String> {
     Ok(buf)
 }
 
+fn is_stdin(input: Option<&String>) -> bool {
+    let is_request = match input {
+        Some(s) if s == "-" => true,
+        _ => false,
+    };
+
+    let is_pipe = !atty::is(Stream::Stdin);
+
+    is_request || is_pipe
+}
+
 fn main() -> Result<()> {
     let opt = Opt::from_args();
+
+    if opt.input.is_none() && !is_stdin(opt.input.as_ref()) {
+        // 引数がなければヘルプ表示
+        Opt::clap().print_help()?;
+        std::process::exit(1);
+    }
+
     let input = match opt.input {
         Some(s) => s,
-        None => read_from_stdin()?
+        None => read_from_stdin()?,
     };
 
     if input.is_empty() {
