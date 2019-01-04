@@ -1,9 +1,12 @@
 extern crate serde_json;
+extern crate clipboard;
 
 use atty::Stream;
 use failure::Error;
 use std::io::{self, Read};
 use structopt::StructOpt;
+use clipboard::ClipboardProvider;
+use clipboard::ClipboardContext;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -37,21 +40,27 @@ fn main() -> Result<()> {
     let opt = Opt::from_args();
 
     if opt.input.is_none() && !is_stdin(opt.input.as_ref()) {
-        // 引数がなければヘルプ表示
-        Opt::clap().print_help()?;
-        std::process::exit(1);
+        // 引数がなければクリップボードを使う
+        let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
+        let content = match ctx.get_contents() {
+            Ok(s) => s,
+            Err(_) => String::from(""),
+        };
+        ctx.set_contents(prettify(&content)?.to_owned()).unwrap();
+
+        Ok(())
+    } else {
+        let input = match opt.input {
+            Some(s) => s,
+            None => read_from_stdin()?,
+        };
+
+        if input.is_empty() {
+            Opt::clap().get_matches().usage();
+        }
+
+        Ok(println!("{}", prettify(&input)?))
     }
-
-    let input = match opt.input {
-        Some(s) => s,
-        None => read_from_stdin()?,
-    };
-
-    if input.is_empty() {
-        Opt::clap().get_matches().usage();
-    }
-
-    Ok(println!("{}", prettify(&input)?))
 }
 
 fn prettify(input: &str) -> Result<String> {
